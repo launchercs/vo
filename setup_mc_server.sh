@@ -6,47 +6,47 @@ GREEN='\033[0;32m'; YELLOW='\033[0;33m'; RED='\033[0;31m'; NC='\033[0m'
 log(){ printf "${GREEN}[INFO]${NC} %s\n" "$*"; }
 warn(){ printf "${YELLOW}[WARN]${NC} %s\n" "$*" >&2; }
 die(){ printf "${RED}[ERROR]${NC} %s\n" "$*" >&2; exit 1; }
-trap 'rc=$?; echo; die "نصب در خط $(caller 0 | awk '\''{print $1}'\'') با کد $rc متوقف شد. پیام خطای بالا را بررسی کنید."' ERR
+trap 'rc=$?; echo; die "Setup failed with exit code $rc. Check the error above."' ERR
 
-command -v apt-get >/dev/null 2>&1 || die 'این نصب‌کننده برای Ubuntu/Debian و GitHub Codespaces آماده شده است.'
-command -v sudo >/dev/null 2>&1 || die 'sudo در محیط پیدا نشد.'
+command -v apt-get >/dev/null 2>&1 || die 'This installer requires Ubuntu/Debian or GitHub Codespaces.'
+command -v sudo >/dev/null 2>&1 || die 'sudo was not found in this environment.'
 
 SERVER_DIR="${SERVER_DIR:-$HOME/minecraft-server}"
 mkdir -p "$SERVER_DIR"
 
 printf '\nMinecraft Server setup (Codespaces)\n'
-printf 'نوع سرور را انتخاب کنید:\n  1) Vanilla (بدون پلاگین)\n  2) Paper (پشتیبانی از پلاگین)\n'
-read -r -p 'انتخاب [1/2] (پیش‌فرض 1): ' SERVER_TYPE
+printf 'Select server type:\n  1) Vanilla (no plugins)\n  2) Paper (plugin support)\n'
+read -r -p 'Choose [1/2] (default 1): ' SERVER_TYPE
 SERVER_TYPE="${SERVER_TYPE:-1}"
-[[ "$SERVER_TYPE" == 1 || "$SERVER_TYPE" == 2 ]] || die 'انتخاب نامعتبر است؛ فقط 1 یا 2 وارد کنید.'
+[[ "$SERVER_TYPE" == 1 || "$SERVER_TYPE" == 2 ]] || die 'Invalid choice. Enter 1 or 2.'
 
 MANIFEST_URL='https://piston-meta.mojang.com/mc/game/version_manifest_v2.json'
-log 'دریافت فهرست رسمی نسخه‌های Minecraft از Mojang...'
+log 'Fetching the official Minecraft version manifest from Mojang...'
 curl --fail --location --silent --show-error --retry 3 --retry-delay 2 "$MANIFEST_URL" -o /tmp/mc-version-manifest.json
 LATEST_RELEASE="$(python3 -c 'import json; print(json.load(open("/tmp/mc-version-manifest.json"))["latest"]["release"])')"
 LATEST_SNAPSHOT="$(python3 -c 'import json; print(json.load(open("/tmp/mc-version-manifest.json"))["latest"]["snapshot"])')"
-printf 'آخرین نسخه پایدار: %s\nآخرین Snapshot: %s\n' "$LATEST_RELEASE" "$LATEST_SNAPSHOT"
-read -r -p "نسخه Minecraft را وارد کنید (خالی = آخرین نسخه پایدار $LATEST_RELEASE): " MC_VERSION
+printf 'Latest release: %s\nLatest snapshot: %s\n' "$LATEST_RELEASE" "$LATEST_SNAPSHOT"
+read -r -p "Enter Minecraft version (blank = latest release $LATEST_RELEASE): " MC_VERSION
 MC_VERSION="${MC_VERSION:-$LATEST_RELEASE}"
 
 if [[ "$SERVER_TYPE" == 2 ]]; then
-  read -r -p 'نسخه Paper را وارد کنید (باید با نسخه Minecraft یکی باشد؛ خالی = همان نسخه): ' PAPER_VERSION
+  read -r -p 'Enter Paper version (must match Minecraft version; blank = same version): ' PAPER_VERSION
   PAPER_VERSION="${PAPER_VERSION:-$MC_VERSION}"
   MC_VERSION="$PAPER_VERSION"
 fi
 
-read -r -p 'حداکثر RAM جاوا بر حسب GB (مثلاً 2 یا 4) [2]: ' RAM_GB
+read -r -p 'Maximum Java RAM in GB (e.g. 2 or 4) [2]: ' RAM_GB
 RAM_GB="${RAM_GB:-2}"
-[[ "$RAM_GB" =~ ^[1-9][0-9]*$ ]] || die 'RAM باید یک عدد صحیح مثبت باشد.'
-read -r -p 'حداکثر تعداد بازیکنان [10]: ' MAX_PLAYERS
+[[ "$RAM_GB" =~ ^[1-9][0-9]*$ ]] || die 'RAM must be a positive integer.'
+read -r -p 'Maximum players [10]: ' MAX_PLAYERS
 MAX_PLAYERS="${MAX_PLAYERS:-10}"
-[[ "$MAX_PLAYERS" =~ ^[1-9][0-9]*$ ]] || die 'تعداد بازیکنان باید یک عدد صحیح مثبت باشد.'
-read -r -p 'فاصله دید (view-distance) [8]: ' VIEW_DISTANCE
+[[ "$MAX_PLAYERS" =~ ^[1-9][0-9]*$ ]] || die 'Player count must be a positive integer.'
+read -r -p 'View distance [8]: ' VIEW_DISTANCE
 VIEW_DISTANCE="${VIEW_DISTANCE:-8}"
-[[ "$VIEW_DISTANCE" =~ ^[1-9][0-9]*$ ]] || die 'فاصله دید باید عددی بین 1 تا 32 باشد.'
-(( VIEW_DISTANCE <= 32 )) || die 'فاصله دید حداکثر 32 است.'
+[[ "$VIEW_DISTANCE" =~ ^[1-9][0-9]*$ ]] || die 'View distance must be between 1 and 32.'
+(( VIEW_DISTANCE <= 32 )) || die 'View distance cannot exceed 32.'
 
-log "بررسی نسخه $MC_VERSION و نسخه Java موردنیاز..."
+log "Checking Minecraft $MC_VERSION and its required Java version..."
 VERSION_URL="$(python3 - "$MC_VERSION" <<'PY'
 import json,sys
 m=json.load(open('/tmp/mc-version-manifest.json'))
@@ -54,49 +54,49 @@ for v in m['versions']:
     if v['id']==sys.argv[1]:
         print(v['url']); break
 else:
-    raise SystemExit('نسخه در فهرست رسمی Mojang پیدا نشد: '+sys.argv[1])
+    raise SystemExit('Version not found in the official Mojang manifest: '+sys.argv[1])
 PY
 )"
 curl --fail --location --silent --show-error --retry 3 "$VERSION_URL" -o /tmp/mc-version-meta.json
 JAVA_MAJOR="$(python3 -c 'import json; d=json.load(open("/tmp/mc-version-meta.json")); print(d.get("javaVersion",{}).get("majorVersion",21))')"
-[[ "$JAVA_MAJOR" =~ ^[0-9]+$ ]] || die 'نسخه Java از اطلاعات نسخه قابل تشخیص نیست.'
-log "نسخه Java موردنیاز: $JAVA_MAJOR"
+[[ "$JAVA_MAJOR" =~ ^[0-9]+$ ]] || die 'Could not determine the required Java version from version metadata.'
+log "Required Java version: $JAVA_MAJOR"
 
-log 'به‌روزرسانی بسته‌ها و نصب وابستگی‌ها...'
+log 'Updating packages and installing dependencies...'
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl jq python3 tar gzip
 JAVA_PACKAGE="openjdk-${JAVA_MAJOR}-jre-headless"
 if ! apt-cache show "$JAVA_PACKAGE" >/dev/null 2>&1; then
   JAVA_PACKAGE="openjdk-${JAVA_MAJOR}-jdk-headless"
 fi
-apt-cache show "$JAVA_PACKAGE" >/dev/null 2>&1 || die "بسته $JAVA_PACKAGE در مخازن سیستم موجود نیست. نسخه Ubuntu/Codespaces یا مخازن Java را بررسی کنید."
+apt-cache show "$JAVA_PACKAGE" >/dev/null 2>&1 || die "Package $JAVA_PACKAGE is unavailable. Check the Ubuntu/Codespaces image and Java repositories."
 sudo apt-get install -y "$JAVA_PACKAGE"
-JAVA_BIN="$(command -v java)" || die 'پس از نصب، دستور java پیدا نشد.'
+JAVA_BIN="$(command -v java)" || die 'Java executable was not found after installation.'
 INSTALLED_JAVA="$($JAVA_BIN -version 2>&1 | head -n 1)"
-log "Java نصب‌شده: $INSTALLED_JAVA"
+log "Installed Java: $INSTALLED_JAVA"
 
 cd "$SERVER_DIR"
 if [[ -e server.jar ]]; then
   BACKUP_OLD="server.jar.before-setup.$(date +%Y%m%d-%H%M%S)"
-  warn "server.jar قبلی به $BACKUP_OLD منتقل می‌شود."
+  warn "Existing server.jar will be moved to $BACKUP_OLD."
   mv server.jar "$BACKUP_OLD"
 fi
 
 if [[ "$SERVER_TYPE" == 1 ]]; then
   SERVER_JAR_URL="$(python3 -c 'import json; print(json.load(open("/tmp/mc-version-meta.json"))["downloads"]["server"]["url"])')"
-  log "دانلود Vanilla Minecraft $MC_VERSION..."
+  log "Downloading Vanilla Minecraft $MC_VERSION..."
   curl --fail --location --silent --show-error --retry 3 --retry-all-errors "$SERVER_JAR_URL" -o server.jar
 else
   PAPER_API="https://api.papermc.io/v2/projects/paper/versions/$MC_VERSION"
-  log "دریافت آخرین Build رسمی Paper برای $MC_VERSION..."
-  curl --fail --location --silent --show-error --retry 3 "$PAPER_API" -o /tmp/paper-version.json || die "نسخه $MC_VERSION در Paper موجود نیست یا API در دسترس نیست."
+  log "Fetching the latest official Paper build for $MC_VERSION..."
+  curl --fail --location --silent --show-error --retry 3 "$PAPER_API" -o /tmp/paper-version.json || die "Paper version $MC_VERSION is unavailable or the Paper API cannot be reached."
   PAPER_BUILD="$(python3 -c 'import json; d=json.load(open("/tmp/paper-version.json")); print(d["builds"][-1])')"
   PAPER_JAR="$(curl --fail --location --silent --show-error "https://api.papermc.io/v2/projects/paper/versions/$MC_VERSION/builds/$PAPER_BUILD" | python3 -c 'import json,sys; print(json.load(sys.stdin)["downloads"]["application"]["name"])')"
   curl --fail --location --silent --show-error --retry 3 --retry-all-errors "https://api.papermc.io/v2/projects/paper/versions/$MC_VERSION/builds/$PAPER_BUILD/downloads/$PAPER_JAR" -o server.jar
 fi
-[[ -s server.jar ]] || die 'فایل server.jar دانلود نشد یا خالی است.'
+[[ -s server.jar ]] || die 'server.jar download failed or the file is empty.'
 file_size="$(stat -c%s server.jar)"
-(( file_size > 1000000 )) || die 'حجم server.jar غیرعادی است؛ دانلود احتمالاً ناقص یا نامعتبر است.'
+(( file_size > 1000000 )) || die 'server.jar has an unexpected size; the download may be incomplete or invalid.'
 
 cat > server.properties <<PROPS
 server-port=25565
@@ -128,7 +128,7 @@ cat > start.sh <<'START'
 set -Eeuo pipefail
 cd "$(dirname "$0")"
 source ./server.env
-[[ -s "$SERVER_JAR" ]] || { echo "server.jar پیدا نشد؛ setup را دوباره اجرا کنید." >&2; exit 1; }
+[[ -s "$SERVER_JAR" ]] || { echo "server.jar not found. Run the setup script again." >&2; exit 1; }
 java -Xms1G -Xmx"${RAM_GB}G" -jar "$SERVER_JAR" nogui
 START
 
@@ -138,16 +138,16 @@ set -u
 cd "$(dirname "$0")"
 source ./server.env
 while true; do
-  echo "[$(date -Is)] اجرای سرور..."
+  echo "[$(date -Is)] Starting server..."
   set +e
   ./start.sh
   status=$?
   set -e
   if [[ $status -eq 0 ]]; then
-    echo 'سرور با خروج عادی متوقف شد؛ Restart انجام نمی‌شود.'
+    echo 'Server stopped normally. Automatic restart will not run.'
     break
   fi
-  echo "سرور با کد $status متوقف شد؛ ${RESTART_DELAY_SECONDS}s دیگر تلاش می‌شود. برای توقف کامل Ctrl+C بزنید."
+  echo "Server exited with code $status. Retrying in ${RESTART_DELAY_SECONDS}s. Press Ctrl+C to stop the restart loop."
   sleep "$RESTART_DELAY_SECONDS"
 done
 AUTO
@@ -164,11 +164,11 @@ TMP="$BACKUP_DIR/world-$STAMP.tar.gz.tmp"
 FINAL="$BACKUP_DIR/world-$STAMP.tar.gz"
 WORLDS=()
 for d in world world_nether world_the_end; do [[ -d "$d" ]] && WORLDS+=("$d"); done
-((${#WORLDS[@]} > 0)) || { echo 'هیچ پوشه دنیایی پیدا نشد.' >&2; exit 1; }
+((${#WORLDS[@]} > 0)) || { echo 'No Minecraft world folders were found.' >&2; exit 1; }
 tar -czf "$TMP" "${WORLDS[@]}"
 mv "$TMP" "$FINAL"
 find "$BACKUP_DIR" -type f -name 'world-*.tar.gz' -mtime "+$KEEP_DAYS" -delete
-echo "Backup ساخته شد: $FINAL"
+echo "Backup created: $FINAL"
 BACKUP
 
 cat > install_backup_cron.sh <<'CRON'
@@ -177,75 +177,75 @@ set -Eeuo pipefail
 cd "$(dirname "$0")"
 SCRIPT="$(pwd)/backup.sh"
 HOURS="${1:-6}"
-[[ "$HOURS" =~ ^([1-9]|1[0-9]|2[0-3])$ ]] || { echo 'فاصله باید عددی بین 1 تا 23 ساعت باشد.' >&2; exit 1; }
-command -v crontab >/dev/null 2>&1 || { echo 'crontab نصب نیست؛ cron را نصب کنید یا backup.sh را دستی اجرا کنید.' >&2; exit 1; }
+[[ "$HOURS" =~ ^([1-9]|1[0-9]|2[0-3])$ ]] || { echo 'Interval must be between 1 and 23 hours.' >&2; exit 1; }
+command -v crontab >/dev/null 2>&1 || { echo 'crontab is not installed. Install cron or run backup.sh manually.' >&2; exit 1; }
 ( crontab -l 2>/dev/null | grep -vF "$SCRIPT" || true; echo "0 */$HOURS * * * cd '$PWD' && '$SCRIPT' >> '$HOME/minecraft-backup.log' 2>&1" ) | crontab -
-echo "بکاپ هر $HOURS ساعت زمان‌بندی شد."
+echo "Backup scheduled every $HOURS hours."
 CRON
 
 cat > plugins.txt <<'PLUGINS'
-# فقط URL مستقیم فایل .jar پلاگین‌های مورد اعتماد را در هر خط وارد کنید.
-# این قابلیت فقط برای Paper فعال است. پس از ویرایش، ./install_plugins.sh را اجرا کنید.
+# Add one trusted direct plugin .jar URL per line.
+# Paper only. After editing, run ./install_plugins.sh.
 PLUGINS
 cat > install_plugins.sh <<'PLUG'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 cd "$(dirname "$0")"
-[[ -f server.jar ]] || { echo 'ابتدا سرور را نصب کنید.' >&2; exit 1; }
-[[ -f server-type.txt && "$(cat server-type.txt)" == paper ]] || { echo 'نصب پلاگین فقط برای سرور Paper فعال است.' >&2; exit 1; }
+[[ -f server.jar ]] || { echo 'Install the server first.' >&2; exit 1; }
+[[ -f server-type.txt && "$(cat server-type.txt)" == paper ]] || { echo 'Plugin installation is available for Paper servers only.' >&2; exit 1; }
 mkdir -p plugins
 while IFS= read -r url || [[ -n "$url" ]]; do
   [[ -z "$url" || "$url" =~ ^[[:space:]]*# ]] && continue
-  [[ "$url" =~ ^https:// ]] || { echo "URL ناامن یا نامعتبر رد شد: $url" >&2; continue; }
+  [[ "$url" =~ ^https:// ]] || { echo "Rejected unsafe or invalid URL: $url" >&2; continue; }
   name="$(basename "${url%%\?*}")"
-  [[ "$name" == *.jar ]] || { echo "فقط لینک مستقیم .jar پذیرفته می‌شود: $url" >&2; continue; }
-  echo "دریافت $name ..."
+  [[ "$name" == *.jar ]] || { echo "Only direct .jar download URLs are accepted: $url" >&2; continue; }
+  echo "Downloading $name ..."
   curl --fail --location --silent --show-error --retry 2 "$url" -o "plugins/$name.tmp"
-  [[ -s "plugins/$name.tmp" ]] || { rm -f "plugins/$name.tmp"; echo "دانلود ناموفق: $name" >&2; continue; }
+  [[ -s "plugins/$name.tmp" ]] || { rm -f "plugins/$name.tmp"; echo "Download failed: $name" >&2; continue; }
   mv "plugins/$name.tmp" "plugins/$name"
 done < plugins.txt
-echo 'پایان نصب پلاگین‌ها. سرور را Restart کنید.'
+echo 'Plugin installation finished. Restart the server.'
 PLUG
 
 cat > start_tunnel.sh <<'TUNNEL'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 if ! command -v playit >/dev/null 2>&1; then
-  echo 'Playit نصب نیست. نصب‌کننده را دوباره اجرا کنید یا راهنمای فارسی را ببینید.' >&2
+  echo 'Playit is not installed. Re-run the installer or follow the README instructions.' >&2
   exit 1
 fi
-echo 'Playit Agent در حال اجراست. برای توقف Ctrl+C را بزنید.'
+echo 'Playit Agent is running. Press Ctrl+C to stop.'
 exec playit
 TUNNEL
 
 chmod +x start.sh start_auto.sh backup.sh install_backup_cron.sh install_plugins.sh start_tunnel.sh
 
-read -r -p 'Playit.gg را نصب کنم؟ [Y/n]: ' INSTALL_PLAYIT
+read -r -p 'Install Playit.gg? [Y/n]: ' INSTALL_PLAYIT
 if [[ ! "$INSTALL_PLAYIT" =~ ^[Nn]$ ]]; then
-  log 'نصب Playit از مخزن رسمی...'
+  log 'Installing Playit from the official repository...'
   curl --fail --location --silent --show-error --retry 3 https://playit-cloud.github.io/ppa/key.gpg -o /tmp/playit-key.gpg
   sudo gpg --dearmor --yes -o /usr/share/keyrings/playit-archive-keyring.gpg /tmp/playit-key.gpg
   echo 'deb [signed-by=/usr/share/keyrings/playit-archive-keyring.gpg] https://playit-cloud.github.io/ppa/data ./' | sudo tee /etc/apt/sources.list.d/playit-cloud.list >/dev/null
   sudo apt-get update
   sudo apt-get install -y playit
 else
-  warn 'نصب Playit رد شد؛ می‌توانید بعداً طبق README نصب کنید.'
+  warn 'Playit installation skipped. You can install it later using the README instructions.'
 fi
 
 if [[ "$SERVER_TYPE" == 2 ]]; then
-  read -r -p 'آیا می‌خواهید اکنون لینک پلاگین‌ها را وارد کنید؟ [y/N]: ' ADD_PLUGINS
+  read -r -p 'Would you like to add plugin URLs now? [y/N]: ' ADD_PLUGINS
   if [[ "$ADD_PLUGINS" =~ ^[Yy]$ ]]; then
-    echo 'لینک مستقیم فایل‌های jar را در plugins.txt قرار دهید و سپس ./install_plugins.sh را اجرا کنید.'
+    echo 'Add direct .jar URLs to plugins.txt, then run ./install_plugins.sh.'
   fi
 fi
 
 cat > eula.txt <<'EULA'
-# برای اجرای سرور باید EULA رسمی Minecraft را بخوانید و بپذیرید.
-# اگر موافق هستید، مقدار زیر را دستی به eula=true تغییر دهید.
+# Read and accept the official Minecraft EULA before starting the server.
+# If you agree, manually change the value below to eula=true.
 eula=false
 EULA
 
-log 'نصب اولیه کامل شد.'
-printf '\nبرای شروع:\n  cd %q\n  nano eula.txt   # فقط پس از مطالعه و پذیرش EULA مقدار را true کنید\n  ./start_auto.sh # اجرای سرور با Restart پس از Crash\n' "$SERVER_DIR"
-printf 'برای تونل: ./start_tunnel.sh\nبرای بکاپ دستی: ./backup.sh\nبرای زمان‌بندی بکاپ: ./install_backup_cron.sh 6\n'
-printf 'برای Paper: فایل plugins.txt را ویرایش کنید و ./install_plugins.sh را اجرا کنید.\n'
+log 'Initial setup completed.'
+printf '\nTo start:\n  cd %q\n  nano eula.txt   # Set to true only after reading and accepting the EULA\n  ./start_auto.sh # Start server and restart after a crash\n' "$SERVER_DIR"
+printf 'Tunnel: ./start_tunnel.sh\nManual backup: ./backup.sh\nSchedule backups: ./install_backup_cron.sh 6\n'
+printf 'For Paper: edit plugins.txt and run ./install_plugins.sh.\n'
