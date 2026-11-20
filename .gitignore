@@ -1,0 +1,11 @@
+# Generated server data
+server.jar
+server.properties
+eula.txt
+server.env
+server-type.txt
+world/
+world_nether/
+world_the_end/
+plugins/*.jar
+*.log
